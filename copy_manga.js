@@ -415,8 +415,6 @@ class CopyManga extends ComicSource {
             while ((tagMatch = tagRegex.exec(body)) !== null) {
                 tagList.push(tagMatch[1]);
             }
-            var tags = tagList.length > 0 ? { "\u9898\u6750": tagList } : null;
-
             // Update time: "最後更新：2026-06-21"
             var updateTime = "";
             var updateMatch = body.match(/\u6700\u540e\u66f4\u65b0[\uff1a:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
@@ -427,6 +425,12 @@ class CopyManga extends ComicSource {
             var statusMatch = body.match(/\u72c0\u614b[\uff1a:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
             if (!statusMatch) statusMatch = body.match(/\u72b6\u6001[\uff1a:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
             if (statusMatch) statusText = statusMatch[1].trim();
+
+            // Build tags: genres, update time, status
+            var tags = {};
+            if (tagList.length > 0) tags["\u9898\u6750"] = tagList;
+            if (updateTime) tags["\u66f4\u65b0"] = [updateTime];
+            if (statusText) tags["\u72b6\u6001"] = [statusText];
 
             // Fetch chapter list from encrypted API
             var chapters = await fetchChapters(id, baseUrl);
@@ -439,8 +443,6 @@ class CopyManga extends ComicSource {
                 chapters: chapters,
                 uploader: author,
                 updateTime: updateTime,
-                // Pass status as subtitle for display
-                subTitle: statusText,
             });
         },
 
