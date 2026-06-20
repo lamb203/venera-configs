@@ -202,7 +202,7 @@ class CopyManga extends ComicSource {
 
     explore = [
         {
-            title: "\u6700\u65b0",
+            title: "最新",
             type: "multiPageComicList",
             load: async (page) => {
                 var url = this._baseUrl + "/comics?ordering=-datetime_updated&page=" + (page || 1);
@@ -212,7 +212,7 @@ class CopyManga extends ComicSource {
             }
         },
         {
-            title: "\u70ed\u95e8",
+            title: "热门",
             type: "multiPageComicList",
             load: async (page) => {
                 var url = this._baseUrl + "/comics?ordering=-hits_total&page=" + (page || 1);
@@ -224,59 +224,59 @@ class CopyManga extends ComicSource {
     ]
 
     category = {
-        title: "\u9898\u6750",
+        title: "题材",
         parts: [
             {
-                name: "\u5206\u7c7b",
+                name: "分类",
                 type: "fixed",
                 categories: [
-                    { label: "\u5168\u90e8", target: { page: "category", attributes: { category: "", param: null } } },
-                    { label: "\u7231\u60c5", target: { page: "category", attributes: { category: "aiqing", param: null } } },
-                    { label: "\u6b22\u4e50\u5411", target: { page: "category", attributes: { category: "huanlexiang", param: null } } },
-                    { label: "\u5192\u9669", target: { page: "category", attributes: { category: "maoxian", param: null } } },
-                    { label: "\u5947\u5e7b", target: { page: "category", attributes: { category: "qihuan", param: null } } },
-                    { label: "\u767e\u5408", target: { page: "category", attributes: { category: "baihe", param: null } } },
-                    { label: "\u6821\u56ed", target: { page: "category", attributes: { category: "xiaoyuan", param: null } } },
-                    { label: "\u79d1\u5e7b", target: { page: "category", attributes: { category: "kehuan", param: null } } },
-                    { label: "\u6771\u65b9", target: { page: "category", attributes: { category: "dongfang", param: null } } },
-                    { label: "\u803d\u7f8e", target: { page: "category", attributes: { category: "danmei", param: null } } },
-                    { label: "\u751f\u6d3b", target: { page: "category", attributes: { category: "shenghuo", param: null } } },
-                    { label: "\u683c\u6597", target: { page: "category", attributes: { category: "gedou", param: null } } },
-                    { label: "\u8f7b\u5c0f\u8bf4", target: { page: "category", attributes: { category: "qingxiaoshuo", param: null } } },
-                    { label: "\u60ac\u7591", target: { page: "category", attributes: { category: "xuanyi", param: null } } },
+                    { label: "全部", target: { page: "category", attributes: { category: "", param: null } } },
+                    { label: "爱情", target: { page: "category", attributes: { category: "aiqing", param: null } } },
+                    { label: "欢乐向", target: { page: "category", attributes: { category: "huanlexiang", param: null } } },
+                    { label: "冒险", target: { page: "category", attributes: { category: "maoxian", param: null } } },
+                    { label: "奇幻", target: { page: "category", attributes: { category: "qihuan", param: null } } },
+                    { label: "百合", target: { page: "category", attributes: { category: "baihe", param: null } } },
+                    { label: "校园", target: { page: "category", attributes: { category: "xiaoyuan", param: null } } },
+                    { label: "科幻", target: { page: "category", attributes: { category: "kehuan", param: null } } },
+                    { label: "東方", target: { page: "category", attributes: { category: "dongfang", param: null } } },
+                    { label: "耽美", target: { page: "category", attributes: { category: "danmei", param: null } } },
+                    { label: "生活", target: { page: "category", attributes: { category: "shenghuo", param: null } } },
+                    { label: "格斗", target: { page: "category", attributes: { category: "gedou", param: null } } },
+                    { label: "轻小说", target: { page: "category", attributes: { category: "qingxiaoshuo", param: null } } },
+                    { label: "悬疑", target: { page: "category", attributes: { category: "xuanyi", param: null } } },
                     { label: "TL", target: { page: "category", attributes: { category: "teenslove", param: null } } },
-                    { label: "\u840c\u7cfb", target: { page: "category", attributes: { category: "mengxi", param: null } } },
-                    { label: "\u795e\u9b3c", target: { page: "category", attributes: { category: "shengui", param: null } } },
-                    { label: "\u804c\u573a", target: { page: "category", attributes: { category: "zhichang", param: null } } },
-                    { label: "\u6cbb\u6108", target: { page: "category", attributes: { category: "zhiyu", param: null } } },
-                    { label: "\u8282\u64cd", target: { page: "category", attributes: { category: "jiecao", param: null } } },
-                    { label: "\u56db\u683c", target: { page: "category", attributes: { category: "sige", param: null } } },
-                    { label: "\u957f\u6761", target: { page: "category", attributes: { category: "changtiao", param: null } } },
-                    { label: "\u8230\u5a18", target: { page: "category", attributes: { category: "jianniang", param: null } } },
-                    { label: "\u641e\u7b11", target: { page: "category", attributes: { category: "gaoxiao", param: null } } },
-                    { label: "\u7ade\u6280", target: { page: "category", attributes: { category: "jingji", param: null } } },
-                    { label: "\u5076\u5a18", target: { page: "category", attributes: { category: "weiniang", param: null } } },
-                    { label: "\u9b54\u5e7b", target: { page: "category", attributes: { category: "mohuan", param: null } } },
-                    { label: "\u70ed\u8840", target: { page: "category", attributes: { category: "rexue", param: null } } },
-                    { label: "\u6027\u8f6c\u6362", target: { page: "category", attributes: { category: "xingzhuanhuan", param: null } } },
-                    { label: "\u7f8e\u98df", target: { page: "category", attributes: { category: "meishi", param: null } } },
-                    { label: "\u52b1\u5fd7", target: { page: "category", attributes: { category: "lizhi", param: null } } },
-                    { label: "\u5f69\u8272", target: { page: "category", attributes: { category: "COLOR", param: null } } },
-                    { label: "\u540e\u5bae", target: { page: "category", attributes: { category: "hougong", param: null } } },
-                    { label: "\u4fa6\u63a2", target: { page: "category", attributes: { category: "zhentan", param: null } } },
-                    { label: "\u60ca\u609a", target: { page: "category", attributes: { category: "jingsong", param: null } } },
-                    { label: "\u5f02\u4e16\u754c", target: { page: "category", attributes: { category: "yishijie", param: null } } },
-                    { label: "\u6218\u4e89", target: { page: "category", attributes: { category: "zhanzheng", param: null } } },
-                    { label: "\u5386\u53f2", target: { page: "category", attributes: { category: "lishi", param: null } } },
-                    { label: "\u673a\u6218", target: { page: "category", attributes: { category: "jizhan", param: null } } },
-                    { label: "\u90fd\u5e02", target: { page: "category", attributes: { category: "dushi", param: null } } },
-                    { label: "\u7a7f\u8d8a", target: { page: "category", attributes: { category: "chuanyue", param: null } } },
-                    { label: "\u91cd\u751f", target: { page: "category", attributes: { category: "chongsheng", param: null } } },
-                    { label: "\u6050\u6016", target: { page: "category", attributes: { category: "kongbu", param: null } } },
-                    { label: "\u751f\u5b58", target: { page: "category", attributes: { category: "shengcun", param: null } } },
-                    { label: "\u5b85\u7cfb", target: { page: "category", attributes: { category: "zhaixi", param: null } } },
-                    { label: "\u8f6c\u751f", target: { page: "category", attributes: { category: "zhuansheng", param: null } } },
-                    { label: "\u4ed9\u4fa0", target: { page: "category", attributes: { category: "xianxia", param: null } } },
+                    { label: "萌系", target: { page: "category", attributes: { category: "mengxi", param: null } } },
+                    { label: "神鬼", target: { page: "category", attributes: { category: "shengui", param: null } } },
+                    { label: "职场", target: { page: "category", attributes: { category: "zhichang", param: null } } },
+                    { label: "治愈", target: { page: "category", attributes: { category: "zhiyu", param: null } } },
+                    { label: "节操", target: { page: "category", attributes: { category: "jiecao", param: null } } },
+                    { label: "四格", target: { page: "category", attributes: { category: "sige", param: null } } },
+                    { label: "长条", target: { page: "category", attributes: { category: "changtiao", param: null } } },
+                    { label: "舰娘", target: { page: "category", attributes: { category: "jianniang", param: null } } },
+                    { label: "搞笑", target: { page: "category", attributes: { category: "gaoxiao", param: null } } },
+                    { label: "竞技", target: { page: "category", attributes: { category: "jingji", param: null } } },
+                    { label: "偶娘", target: { page: "category", attributes: { category: "weiniang", param: null } } },
+                    { label: "魔幻", target: { page: "category", attributes: { category: "mohuan", param: null } } },
+                    { label: "热血", target: { page: "category", attributes: { category: "rexue", param: null } } },
+                    { label: "性转换", target: { page: "category", attributes: { category: "xingzhuanhuan", param: null } } },
+                    { label: "美食", target: { page: "category", attributes: { category: "meishi", param: null } } },
+                    { label: "励志", target: { page: "category", attributes: { category: "lizhi", param: null } } },
+                    { label: "彩色", target: { page: "category", attributes: { category: "COLOR", param: null } } },
+                    { label: "后宮", target: { page: "category", attributes: { category: "hougong", param: null } } },
+                    { label: "侦探", target: { page: "category", attributes: { category: "zhentan", param: null } } },
+                    { label: "惊悚", target: { page: "category", attributes: { category: "jingsong", param: null } } },
+                    { label: "异世界", target: { page: "category", attributes: { category: "yishijie", param: null } } },
+                    { label: "战争", target: { page: "category", attributes: { category: "zhanzheng", param: null } } },
+                    { label: "历史", target: { page: "category", attributes: { category: "lishi", param: null } } },
+                    { label: "机战", target: { page: "category", attributes: { category: "jizhan", param: null } } },
+                    { label: "都市", target: { page: "category", attributes: { category: "dushi", param: null } } },
+                    { label: "穿越", target: { page: "category", attributes: { category: "chuanyue", param: null } } },
+                    { label: "重生", target: { page: "category", attributes: { category: "chongsheng", param: null } } },
+                    { label: "恐怖", target: { page: "category", attributes: { category: "kongbu", param: null } } },
+                    { label: "生存", target: { page: "category", attributes: { category: "shengcun", param: null } } },
+                    { label: "宅系", target: { page: "category", attributes: { category: "zhaixi", param: null } } },
+                    { label: "转生", target: { page: "category", attributes: { category: "zhuansheng", param: null } } },
+                    { label: "仙侠", target: { page: "category", attributes: { category: "xianxia", param: null } } },
                 ]
             }
         ],
@@ -296,19 +296,19 @@ class CopyManga extends ComicSource {
         },
         optionList: [
             {
-                label: "\u6392\u5e8f",
+                label: "排序",
                 options: [
-                    "-datetime_updated-\u6700\u65b0",
-                    "-popular-\u6700\u71b1",
+                    "-datetime_updated-最新",
+                    "-popular-最熱",
                 ]
             }
         ],
         ranking: {
             options: [
-                "day-\u65e5\u699c",
-                "week-\u5468\u699c",
-                "month-\u6708\u699c",
-                "total-\u7e3d\u699c",
+                "day-日榜",
+                "week-周榜",
+                "month-月榜",
+                "total-總榜",
             ],
             load: async (option, page) => {
                 var url = this._baseUrl + "/rank?type=male&table=" + option;
@@ -417,20 +417,20 @@ class CopyManga extends ComicSource {
             }
             // Update time: "最後更新：2026-06-21"
             var updateTime = "";
-            var updateMatch = body.match(/\u6700\u540e\u66f4\u65b0[\uff1a:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
+            var updateMatch = body.match(/(?:最後|最后)更新[：:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
             if (updateMatch) updateTime = updateMatch[1].trim();
 
             // Status: "狀態：連載中"
             var statusText = "";
-            var statusMatch = body.match(/\u72c0\u614b[\uff1a:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
-            if (!statusMatch) statusMatch = body.match(/\u72b6\u6001[\uff1a:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
+            var statusMatch = body.match(/狀態[：:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
+            if (!statusMatch) statusMatch = body.match(/状态[：:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
             if (statusMatch) statusText = statusMatch[1].trim();
 
             // Build tags: genres, update time, status
             var tags = {};
-            if (tagList.length > 0) tags["\u9898\u6750"] = tagList;
-            if (updateTime) tags["\u66f4\u65b0"] = [updateTime];
-            if (statusText) tags["\u72b6\u6001"] = [statusText];
+            if (tagList.length > 0) tags["题材"] = tagList;
+            if (updateTime) tags["更新"] = [updateTime];
+            if (statusText) tags["状态"] = [statusText];
 
             // Fetch chapter list from encrypted API
             var chapters = await fetchChapters(id, baseUrl);
@@ -481,7 +481,7 @@ class CopyManga extends ComicSource {
 
         addOrDelFavorite: async (comicId, folderId, isAdding, favoriteId) => {
             var token = this.loadData("token");
-            if (!token) throw "\u767b\u5f55\u5df2\u8fc7\u671f";
+            if (!token) throw "登录已过期";
 
             var uuid = favoriteId || null;
 
@@ -493,7 +493,7 @@ class CopyManga extends ComicSource {
                 if (uuidMatch) uuid = uuidMatch[1];
             }
 
-            if (!uuid) throw "\u672a\u80fd\u83b7\u53d6\u6f2b\u753bUUID";
+            if (!uuid) throw "未能获取漫画UUID";
 
             var res = await Network.post(
                 this._baseUrl + "/api/v2/web/collect",
@@ -507,7 +507,7 @@ class CopyManga extends ComicSource {
             var json = JSON.parse(res.body);
             if (json.code === 200) return "ok";
 
-            throw json.message || "\u6536\u85cf\u5931\u8d25";
+            throw json.message || "收藏失败";
         },
 
         loadComics: async (page, folder) => {
@@ -523,8 +523,8 @@ class CopyManga extends ComicSource {
             var json = JSON.parse(res.body);
 
             if (json.code !== 200) {
-                if (res.status === 401) throw "\u767b\u5f55\u5df2\u8fc7\u671f";
-                throw json.message || "\u52a0\u8f7d\u5931\u8d25";
+                if (res.status === 401) throw "登录已过期";
+                throw json.message || "加载失败";
             }
 
             var list = json.results && json.results.list ? json.results.list : [];
@@ -551,7 +551,7 @@ class CopyManga extends ComicSource {
 
     settings = {
         base_url: {
-            title: "API\u5730\u5740",
+            title: "API地址",
             type: "input",
             validator: null,
             default: "https://www.copy3000.com"
@@ -560,13 +560,13 @@ class CopyManga extends ComicSource {
 
     translation = {
         "zh_CN": {
-            "API\u5730\u5740": "API\u5730\u5740"
+            "API地址": "API地址"
         },
         "zh_TW": {
-            "API\u5730\u5740": "API\u5730\u5740"
+            "API地址": "API地址"
         },
         "en": {
-            "API\u5730\u5740": "API Address"
+            "API地址": "API Address"
         }
     }
 }
