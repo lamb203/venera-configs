@@ -25,12 +25,20 @@ function hexToBytes(hex) {
 }
 
 // Decrypt AES-128-CBC: first 16 chars = IV (UTF-8), rest = hex ciphertext
+// Venera's decryptAesCbc may not strip PKCS7 padding, so we do it manually.
 function decryptData(encrypted) {
     var iv = Convert.encodeUtf8(encrypted.substring(0, 16));
     var ciphertext = hexToBytes(encrypted.substring(16));
     var key = Convert.encodeUtf8(CCZ);
-    var decrypted = Convert.decryptAesCbc(ciphertext, key, iv);
-    return JSON.parse(Convert.decodeUtf8(decrypted));
+    var decrypted = new Uint8Array(Convert.decryptAesCbc(ciphertext, key, iv));
+
+    // Strip PKCS7 padding
+    var padLen = decrypted[decrypted.length - 1];
+    if (padLen >= 1 && padLen <= 16) {
+        decrypted = decrypted.slice(0, decrypted.length - padLen);
+    }
+
+    return JSON.parse(Convert.decodeUtf8(decrypted.buffer));
 }
 
 // Fetch chapter list from encrypted API
