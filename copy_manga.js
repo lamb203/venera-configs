@@ -186,40 +186,6 @@ class CopyManga extends ComicSource {
             throw json.message || "登录失败";
         },
 
-        loginWithCookies: {
-            fields: [
-                "token",
-                "user_id",
-                "sessionid",
-                "csrftoken"
-            ],
-            validate: async (values) => {
-                var baseUrl = "https://www.copy3000.com";
-
-                // Set all cookies before validating
-                var cookies = [
-                    new Cookie({name: "token", value: values[0], domain: ".copy3000.com"}),
-                    new Cookie({name: "user_id", value: values[1], domain: ".copy3000.com"}),
-                ];
-                if (values[2]) cookies.push(new Cookie({name: "sessionid", value: values[2], domain: "www.copy3000.com"}));
-                if (values[3]) cookies.push(new Cookie({name: "csrftoken", value: values[3], domain: "www.copy3000.com"}));
-
-                Network.setCookies(baseUrl, cookies);
-
-                // Validate by fetching user info
-                try {
-                    var res = await Network.get(baseUrl + "/api/v2/web/user/info", {});
-                    var json = JSON.parse(res.body);
-                    if (json.code === 200 && json.results) {
-                        return true;
-                    }
-                } catch (e) {
-                    // fall through
-                }
-                return false;
-            }
-        },
-
         logout: () => {
             this.deleteData("token");
             this.deleteData("user_id");
