@@ -453,13 +453,13 @@ class CopyManga extends ComicSource {
 
             // Update time: "最後更新：2026-06-21"
             var updateTime = "";
-            var updateMatch = body.match(/\u6700\u540e\u66f4\u65b0[\uff1a:]\s*[^>]*>([^<]+)</);
+            var updateMatch = body.match(/\u6700\u540e\u66f4\u65b0[\uff1a:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
             if (updateMatch) updateTime = updateMatch[1].trim();
 
             // Status: "狀態：連載中"
             var statusText = "";
-            var statusMatch = body.match(/\u72c0\u614b[\uff1a:]\s*[^>]*>([^<]+)</);
-            if (!statusMatch) statusMatch = body.match(/\u72b6\u6001[\uff1a:]\s*[^>]*>([^<]+)</);
+            var statusMatch = body.match(/\u72c0\u614b[\uff1a:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
+            if (!statusMatch) statusMatch = body.match(/\u72b6\u6001[\uff1a:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
             if (statusMatch) statusText = statusMatch[1].trim();
 
             // Fetch chapter list from encrypted API
