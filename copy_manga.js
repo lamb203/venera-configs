@@ -25,20 +25,21 @@ function hexToBytes(hex) {
 }
 
 // Decrypt AES-128-CBC: first 16 chars = IV (UTF-8), rest = hex ciphertext
-// Venera's decryptAesCbc may not strip PKCS7 padding, so we do it manually.
+// Venera's decryptAesCbc may not strip PKCS7 padding, so we do it from the string.
 function decryptData(encrypted) {
     var iv = Convert.encodeUtf8(encrypted.substring(0, 16));
     var ciphertext = hexToBytes(encrypted.substring(16));
     var key = Convert.encodeUtf8(CCZ);
-    var decrypted = new Uint8Array(Convert.decryptAesCbc(ciphertext, key, iv));
+    var decrypted = Convert.decryptAesCbc(ciphertext, key, iv);
+    var text = Convert.decodeUtf8(decrypted);
 
-    // Strip PKCS7 padding
-    var padLen = decrypted[decrypted.length - 1];
-    if (padLen >= 1 && padLen <= 16) {
-        decrypted = decrypted.slice(0, decrypted.length - padLen);
+    // Strip PKCS7 padding: last byte's value = number of padding bytes
+    var lastCode = text.charCodeAt(text.length - 1);
+    if (lastCode >= 1 && lastCode <= 16) {
+        text = text.substring(0, text.length - lastCode);
     }
 
-    return JSON.parse(Convert.decodeUtf8(decrypted.buffer));
+    return JSON.parse(text);
 }
 
 // Fetch chapter list from encrypted API
@@ -106,11 +107,20 @@ function apiToComic(item) {
 // ============================================================
 
 class CopyManga extends ComicSource {
-    name = "\u62f7\u8d1d\u6f2b\u753b"
+
+    name = "拷贝漫画"
+
     key = "copy_manga"
+
     version = "1.4.1"
+
     minAppVersion = "1.6.0"
-    url = ""
+
+    url = "https://cdn.jsdelivr.net/gh/venera-app/venera-configs@main/copy_manga.js"
+
+    init() {
+        console.log("CopyManga v" + this.version + " loaded");
+    }
 
     get _baseUrl() {
         return this.loadSetting("base_url") || DEFAULT_BASE_URL;
