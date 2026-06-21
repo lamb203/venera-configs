@@ -243,7 +243,7 @@ class CopyManga extends ComicSource {
     ]
 
     category = {
-        title: "题材",
+        title: "拷贝漫画",
         parts: [
             {
                 name: "排行",
@@ -305,8 +305,7 @@ class CopyManga extends ComicSource {
                     { label: "仙侠", target: { page: "category", attributes: { category: "xianxia", param: null } } },
                 ]
             }
-        ],
-        enableRankingPage: true,
+        ]
     }
 
     categoryComics = {
@@ -358,6 +357,7 @@ class CopyManga extends ComicSource {
             }
 
             // Theme browsing mode
+            var offset = ((page || 1) - 1) * 50;
             var region = options && options[0] ? options[0] : "";
             var status = options && options[1] ? options[1] : "";
             var ordering = options && options[2] ? options[2] : "-datetime_updated";
