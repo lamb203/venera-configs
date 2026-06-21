@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         拷贝漫画
-// @version      1.0.0
+// @version      1.6.0
 // @author       Venera
 // @description  拷贝漫画源 - copy3000.com
 // ==/UserScript==
@@ -66,17 +66,58 @@ async function fetchChapters(comicId, baseUrl) {
     return chapters;
 }
 
+// Parse HTML-based comic list (used by /recommend and /newest pages)
+// These pages render comics as .exemptComic_Item elements
+function parseHtmlComicList(html) {
+    var doc = new HtmlDocument(html);
+    var items = doc.querySelectorAll(".exemptComic_Item");
+    var comics = [];
+    for (var i = 0; i < items.length; i++) {
+        var el = items[i];
+        var link = el.querySelector("a[href*='/comic/']");
+        if (!link) continue;
+        var href = link.attributes ? link.attributes.href || "" : "";
+        var idMatch = href.match(/\/comic\/([^/]+)/);
+        if (!idMatch) continue;
+        var id = idMatch[1];
+
+        var titleEl = el.querySelector(".twoLines");
+        var title = titleEl ? titleEl.text.trim() : id;
+
+        var img = el.querySelector("img");
+        var cover = img ? (img.attributes["data-src"] || img.attributes.src || "") : "";
+
+        var authorEl = el.querySelector(".exemptComicItem-txt-span a");
+        var author = authorEl ? authorEl.text.trim() : "";
+
+        comics.push(new Comic({ id: id, title: title, cover: cover, description: author }));
+    }
+
+    doc.dispose();
+    return comics;
+}
+
 // Parse the embedded list attribute from explore page HTML
 // The list attribute contains a JS array literal with single-quoted strings
-function parseExploreList(html) {
-    var m = html.match(/list="([^"]+)"/);
-    if (!m) return [];
-    var raw = m[1]
+function parseListAttribute(html) {
+    // Find all list="..." occurrences and pick only the one that looks like JSON array
+    var regex = /list="([^"]+)"/g;
+    var raw = "";
+    var m;
+    while ((m = regex.exec(html)) !== null) {
+        var val = m[1].trim();
+        if (val.startsWith("[")) {
+            raw = val;
+            break;
+        }
+    }
+    if (!raw) return [];
+    var decoded = raw
         .replace(/&#x27;/g, "'")
-        .replace(/&#34;/g, '"')
-        .replace(/&quot;/g, '"')
+        .replace(/&#34;/g, '\\"')
+        .replace(/&quot;/g, '\\"')
         .replace(/&amp;/g, "&");
-    var json = raw.replace(/'/g, '"');
+    var json = decoded.replace(/'/g, '"');
     var items = JSON.parse(json);
     return items.map(function (item) {
         return new Comic({
@@ -106,6 +147,12 @@ function apiToComic(item) {
 function parseMaxPage(html) {
     var pageMatch = html.match(/<ul[^>]*class="page-all"[^>]*>[\s\S]*?<\/ul>/);
     if (pageMatch) {
+        // page-total shows "/254" — actual total page count
+        var totalMatch = pageMatch[0].match(/<li[^>]*class="page-total"[^>]*>\s*\/\s*(\d+)\s*<\/li>/);
+        if (totalMatch) {
+            return parseInt(totalMatch[1]) || 1;
+        }
+        // Fallback: get max from visible page numbers
         var nums = pageMatch[0].match(/>(\d+)<\/a>/g);
         if (nums) {
             var max = 1;
@@ -117,6 +164,92 @@ function parseMaxPage(html) {
         }
     }
     return 1;
+}
+
+// ── categoryComics sub-handlers ─────────────────────────────
+
+// Author page: /author/{slug}/comics?offset=&limit=50
+async function loadAuthorPage(baseUrl, slug, page) {
+    var offset = ((page || 1) - 1) * 50;
+    var url = baseUrl + "/author/" + encodeURIComponent(slug) + "/comics?offset=" + offset + "&limit=50";
+    var resp = await Network.get(url, { dnts: "3" });
+    var body = resp.body;
+    var doc = new HtmlDocument(body);
+    var items = doc.querySelectorAll(".correlationItem");
+    var comics = [];
+    for (var i = 0; i < items.length; i++) {
+        var el = items[i];
+        var link = el.querySelector("a[href*='/comic/']");
+        if (!link) continue;
+        var href = link.attributes ? link.attributes.href || "" : "";
+        var idMatch = href.match(/\/comic\/([^/]+)/);
+        if (!idMatch) continue;
+        var img = el.querySelector("img");
+        var cover = img ? (img.attributes["data-src"] || img.attributes.src || "") : "";
+        var titleEl = el.querySelector(".twoLines");
+        var title = titleEl ? titleEl.text.trim() : idMatch[1];
+        comics.push(new Comic({ id: idMatch[1], title: title, cover: cover }));
+    }
+    doc.dispose();
+    return { comics: comics, maxPage: parseMaxPage(body) };
+}
+
+// Explore view-more landing page: generic paginated comic list
+async function loadExplorePage(baseUrl, path, pageSize, page, parser) {
+    var offset = ((page || 1) - 1) * pageSize;
+    var separator = path.indexOf("?") >= 0 ? "&" : "?";
+    var url = baseUrl + path + separator + "offset=" + offset + "&limit=" + pageSize;
+    var resp = await Network.get(url, { dnts: "3" });
+    return { comics: parser(resp.body), maxPage: parseMaxPage(resp.body) };
+}
+
+// Ranking page: single-page list from /rank
+async function loadRankingPage(baseUrl, options) {
+    var audience = options && options[0] ? options[0] : "male";
+    var dateRange = options && options[1] ? options[1] : "day";
+    var url = baseUrl + "/rank?type=" + audience + "&table=" + dateRange;
+    var resp = await Network.get(url, { dnts: "3" });
+    var doc = new HtmlDocument(resp.body);
+    var items = doc.querySelectorAll(".ranking-all > li");
+    var comics = [];
+    for (var i = 0; i < items.length; i++) {
+        var el = items[i];
+        var link = el.querySelector("a[href*='/comic/']");
+        if (!link) continue;
+        var href = link.attributes ? link.attributes.href || "" : "";
+        var idMatch = href.match(/\/comic\/([^/]+)/);
+        if (!idMatch) continue;
+        var id = idMatch[1];
+        var titleEl = el.querySelector(".threeLines");
+        var title = titleEl ? titleEl.text.trim() : id;
+        var imgEl = el.querySelector("img");
+        var cover = imgEl ? (imgEl.attributes["data-src"] || imgEl.attributes.src || "") : "";
+        var authorEl = el.querySelector(".oneLines");
+        var author = "";
+        if (authorEl) {
+            var authorLink = authorEl.querySelector("a");
+            if (authorLink) author = authorLink.text.trim();
+        }
+        comics.push(new Comic({ id: id, title: title, cover: cover, subTitle: author }));
+    }
+    doc.dispose();
+    return { comics: comics, maxPage: 1 };
+}
+
+// Theme browsing: /comics?theme={slug} with optional filters
+async function loadThemePage(baseUrl, category, param, options, page) {
+    var offset = ((page || 1) - 1) * 50;
+    var region = options && options[0] ? options[0] : "";
+    var status = options && options[1] ? options[1] : "";
+    var ordering = { "new": "-datetime_updated", "hot": "-popular" };
+    var orderingValue = ordering[options && options[2] ? options[2] : "new"] || "-datetime_updated";
+    var themeSlug = param !== null && param !== undefined ? param : category;
+    var url = baseUrl + "/comics?theme=" + encodeURIComponent(themeSlug);
+    if (region) url += "&region=" + region;
+    if (status) url += "&status=" + status;
+    url += "&ordering=" + orderingValue + "&offset=" + offset + "&limit=50";
+    var resp = await Network.get(url, { dnts: "3" });
+    return { comics: parseListAttribute(resp.body), maxPage: parseMaxPage(resp.body) };
 }
 
 // ============================================================
@@ -134,10 +267,6 @@ class CopyManga extends ComicSource {
     minAppVersion = "1.6.0"
 
     url = "https://cdn.jsdelivr.net/gh/venera-app/venera-configs@main/copy_manga.js"
-
-    init() {
-        console.log("CopyManga v" + this.version + " loaded");
-    }
 
     // Helper: generate random 6-digit salt (same as website JS)
     _genSalt() {
@@ -217,27 +346,81 @@ class CopyManga extends ComicSource {
         return this.loadSetting("base_url") || DEFAULT_BASE_URL;
     }
 
+    // Calculate pagination offset (0-based)
+    _offset(page, pageSize) {
+        return ((page || 1) - 1) * pageSize;
+    }
+
+    // Extract comic UUID from the detail page for favorites API
+    async _fetchFavUuid(comicId) {
+        var resp = await Network.get(this._baseUrl + "/comic/" + encodeURIComponent(comicId), { dnts: "3" });
+        var m = resp.body.match(/onclick="collect\('([^']+)'\)"/);
+        return m ? m[1] : null;
+    }
+
     explore = [
         {
-            title: "最新",
-            type: "multiPageComicList",
+            title: "拷贝漫画",
+            type: "multiPartPage",
+
+            /**
+             * Load all explore sections at once.
+             * @returns {Array<{title: string, comics: Comic[], viewMore: string?}>}
+             */
             load: async (page) => {
-                var offset = ((page || 1) - 1) * 50;
-                var url = this._baseUrl + "/comics?ordering=-datetime_updated&offset=" + offset + "&limit=50";
-                var resp = await Network.get(url, { dnts: "3" });
-                var comics = parseExploreList(resp.body);
-                return { comics: comics, maxPage: parseMaxPage(resp.body) };
-            }
-        },
-        {
-            title: "热门",
-            type: "multiPageComicList",
-            load: async (page) => {
-                var offset = ((page || 1) - 1) * 50;
-                var url = this._baseUrl + "/comics?ordering=-hits_total&offset=" + offset + "&limit=50";
-                var resp = await Network.get(url, { dnts: "3" });
-                var comics = parseExploreList(resp.body);
-                return { comics: comics, maxPage: parseMaxPage(resp.body) };
+                var resp = await Network.get(this._baseUrl + "/", { dnts: "3" });
+                var html = resp.body;
+
+                var doc = new HtmlDocument(html);
+                var icons = doc.querySelectorAll(".index-all-icon");
+                var results = [];
+
+                for (var i = 0; i < icons.length; i++) {
+                    var icon = icons[i];
+                    var titleEl = icon.querySelector(".index-all-icon-left-txt");
+                    if (!titleEl) continue;
+                    var raw = titleEl.text.trim().replace(/<[^>]+>/g, "").trim();
+
+                    // Map title to canonical section name
+                    var name = "";
+                    if (raw.indexOf("漫畫") >= 0 && raw.indexOf("推薦") >= 0) name = "漫畫推薦";
+                    else if (raw.indexOf("熱門") >= 0) name = "熱門更新";
+                    else if (raw.indexOf("全新") >= 0) name = "全新上架";
+                    else continue;
+
+                    // Get the parent container for this section
+                    var container = icon.parent;
+                    if (!container) continue;
+
+                    // Extract comic items from the .row
+                    var items = container.querySelectorAll('.col-auto > a[href*="/comic/"]');
+                    var comics = [];
+                    for (var j = 0; j < items.length; j++) {
+                        var a = items[j];
+                        var href = a.attributes.href || "";
+                        var idMatch = href.match(/\/comic\/([^/]+)/);
+                        if (!idMatch) continue;
+
+                        var img = a.querySelector("img");
+                        var cover = img ? (img.attributes["data-src"] || img.attributes.src || "") : "";
+
+                        var p = a.querySelector(".edit-txt");
+                        var title = p ? p.text.trim() : idMatch[1];
+
+                        comics.push(new Comic({ id: idMatch[1], title: title, cover: cover }));
+                    }
+
+                    if (comics.length > 0) {
+                        results.push({
+                            title: name,
+                            comics: comics,
+                            viewMore: "category:" + name,
+                        });
+                    }
+                }
+
+                doc.dispose();
+                return results;
             }
         }
     ]
@@ -256,53 +439,53 @@ class CopyManga extends ComicSource {
                 name: "分类",
                 type: "fixed",
                 categories: [
-                    { label: "全部", target: { page: "category", attributes: { category: "", param: null } } },
-                    { label: "爱情", target: { page: "category", attributes: { category: "aiqing", param: null } } },
-                    { label: "欢乐向", target: { page: "category", attributes: { category: "huanlexiang", param: null } } },
-                    { label: "冒险", target: { page: "category", attributes: { category: "maoxian", param: null } } },
-                    { label: "奇幻", target: { page: "category", attributes: { category: "qihuan", param: null } } },
-                    { label: "百合", target: { page: "category", attributes: { category: "baihe", param: null } } },
-                    { label: "校园", target: { page: "category", attributes: { category: "xiaoyuan", param: null } } },
-                    { label: "科幻", target: { page: "category", attributes: { category: "kehuan", param: null } } },
-                    { label: "東方", target: { page: "category", attributes: { category: "dongfang", param: null } } },
-                    { label: "耽美", target: { page: "category", attributes: { category: "danmei", param: null } } },
-                    { label: "生活", target: { page: "category", attributes: { category: "shenghuo", param: null } } },
-                    { label: "格斗", target: { page: "category", attributes: { category: "gedou", param: null } } },
-                    { label: "轻小说", target: { page: "category", attributes: { category: "qingxiaoshuo", param: null } } },
-                    { label: "悬疑", target: { page: "category", attributes: { category: "xuanyi", param: null } } },
-                    { label: "TL", target: { page: "category", attributes: { category: "teenslove", param: null } } },
-                    { label: "萌系", target: { page: "category", attributes: { category: "mengxi", param: null } } },
-                    { label: "神鬼", target: { page: "category", attributes: { category: "shengui", param: null } } },
-                    { label: "职场", target: { page: "category", attributes: { category: "zhichang", param: null } } },
-                    { label: "治愈", target: { page: "category", attributes: { category: "zhiyu", param: null } } },
-                    { label: "节操", target: { page: "category", attributes: { category: "jiecao", param: null } } },
-                    { label: "四格", target: { page: "category", attributes: { category: "sige", param: null } } },
-                    { label: "长条", target: { page: "category", attributes: { category: "changtiao", param: null } } },
-                    { label: "舰娘", target: { page: "category", attributes: { category: "jianniang", param: null } } },
-                    { label: "搞笑", target: { page: "category", attributes: { category: "gaoxiao", param: null } } },
-                    { label: "竞技", target: { page: "category", attributes: { category: "jingji", param: null } } },
-                    { label: "偶娘", target: { page: "category", attributes: { category: "weiniang", param: null } } },
-                    { label: "魔幻", target: { page: "category", attributes: { category: "mohuan", param: null } } },
-                    { label: "热血", target: { page: "category", attributes: { category: "rexue", param: null } } },
-                    { label: "性转换", target: { page: "category", attributes: { category: "xingzhuanhuan", param: null } } },
-                    { label: "美食", target: { page: "category", attributes: { category: "meishi", param: null } } },
-                    { label: "励志", target: { page: "category", attributes: { category: "lizhi", param: null } } },
-                    { label: "彩色", target: { page: "category", attributes: { category: "COLOR", param: null } } },
-                    { label: "后宮", target: { page: "category", attributes: { category: "hougong", param: null } } },
-                    { label: "侦探", target: { page: "category", attributes: { category: "zhentan", param: null } } },
-                    { label: "惊悚", target: { page: "category", attributes: { category: "jingsong", param: null } } },
-                    { label: "异世界", target: { page: "category", attributes: { category: "yishijie", param: null } } },
-                    { label: "战争", target: { page: "category", attributes: { category: "zhanzheng", param: null } } },
-                    { label: "历史", target: { page: "category", attributes: { category: "lishi", param: null } } },
-                    { label: "机战", target: { page: "category", attributes: { category: "jizhan", param: null } } },
-                    { label: "都市", target: { page: "category", attributes: { category: "dushi", param: null } } },
-                    { label: "穿越", target: { page: "category", attributes: { category: "chuanyue", param: null } } },
-                    { label: "重生", target: { page: "category", attributes: { category: "chongsheng", param: null } } },
-                    { label: "恐怖", target: { page: "category", attributes: { category: "kongbu", param: null } } },
-                    { label: "生存", target: { page: "category", attributes: { category: "shengcun", param: null } } },
-                    { label: "宅系", target: { page: "category", attributes: { category: "zhaixi", param: null } } },
-                    { label: "转生", target: { page: "category", attributes: { category: "zhuansheng", param: null } } },
-                    { label: "仙侠", target: { page: "category", attributes: { category: "xianxia", param: null } } },
+                    { label: "全部", target: { page: "category", attributes: { category: "全部", param: "" } } },
+                    { label: "爱情", target: { page: "category", attributes: { category: "爱情", param: "aiqing" } } },
+                    { label: "欢乐向", target: { page: "category", attributes: { category: "欢乐向", param: "huanlexiang" } } },
+                    { label: "冒险", target: { page: "category", attributes: { category: "冒险", param: "maoxian" } } },
+                    { label: "奇幻", target: { page: "category", attributes: { category: "奇幻", param: "qihuan" } } },
+                    { label: "百合", target: { page: "category", attributes: { category: "百合", param: "baihe" } } },
+                    { label: "校园", target: { page: "category", attributes: { category: "校园", param: "xiaoyuan" } } },
+                    { label: "科幻", target: { page: "category", attributes: { category: "科幻", param: "kehuan" } } },
+                    { label: "東方", target: { page: "category", attributes: { category: "東方", param: "dongfang" } } },
+                    { label: "耽美", target: { page: "category", attributes: { category: "耽美", param: "danmei" } } },
+                    { label: "生活", target: { page: "category", attributes: { category: "生活", param: "shenghuo" } } },
+                    { label: "格斗", target: { page: "category", attributes: { category: "格斗", param: "gedou" } } },
+                    { label: "轻小说", target: { page: "category", attributes: { category: "轻小说", param: "qingxiaoshuo" } } },
+                    { label: "悬疑", target: { page: "category", attributes: { category: "悬疑", param: "xuanyi" } } },
+                    { label: "TL", target: { page: "category", attributes: { category: "TL", param: "teenslove" } } },
+                    { label: "萌系", target: { page: "category", attributes: { category: "萌系", param: "mengxi" } } },
+                    { label: "神鬼", target: { page: "category", attributes: { category: "神鬼", param: "shengui" } } },
+                    { label: "职场", target: { page: "category", attributes: { category: "职场", param: "zhichang" } } },
+                    { label: "治愈", target: { page: "category", attributes: { category: "治愈", param: "zhiyu" } } },
+                    { label: "节操", target: { page: "category", attributes: { category: "节操", param: "jiecao" } } },
+                    { label: "四格", target: { page: "category", attributes: { category: "四格", param: "sige" } } },
+                    { label: "长条", target: { page: "category", attributes: { category: "长条", param: "changtiao" } } },
+                    { label: "舰娘", target: { page: "category", attributes: { category: "舰娘", param: "jianniang" } } },
+                    { label: "搞笑", target: { page: "category", attributes: { category: "搞笑", param: "gaoxiao" } } },
+                    { label: "竞技", target: { page: "category", attributes: { category: "竞技", param: "jingji" } } },
+                    { label: "偶娘", target: { page: "category", attributes: { category: "偶娘", param: "weiniang" } } },
+                    { label: "魔幻", target: { page: "category", attributes: { category: "魔幻", param: "mohuan" } } },
+                    { label: "热血", target: { page: "category", attributes: { category: "热血", param: "rexue" } } },
+                    { label: "性转换", target: { page: "category", attributes: { category: "性转换", param: "xingzhuanhuan" } } },
+                    { label: "美食", target: { page: "category", attributes: { category: "美食", param: "meishi" } } },
+                    { label: "励志", target: { page: "category", attributes: { category: "励志", param: "lizhi" } } },
+                    { label: "彩色", target: { page: "category", attributes: { category: "彩色", param: "COLOR" } } },
+                    { label: "后宮", target: { page: "category", attributes: { category: "后宮", param: "hougong" } } },
+                    { label: "侦探", target: { page: "category", attributes: { category: "侦探", param: "zhentan" } } },
+                    { label: "惊悚", target: { page: "category", attributes: { category: "惊悚", param: "jingsong" } } },
+                    { label: "异世界", target: { page: "category", attributes: { category: "异世界", param: "yishijie" } } },
+                    { label: "战争", target: { page: "category", attributes: { category: "战争", param: "zhanzheng" } } },
+                    { label: "历史", target: { page: "category", attributes: { category: "历史", param: "lishi" } } },
+                    { label: "机战", target: { page: "category", attributes: { category: "机战", param: "jizhan" } } },
+                    { label: "都市", target: { page: "category", attributes: { category: "都市", param: "dushi" } } },
+                    { label: "穿越", target: { page: "category", attributes: { category: "穿越", param: "chuanyue" } } },
+                    { label: "重生", target: { page: "category", attributes: { category: "重生", param: "chongsheng" } } },
+                    { label: "恐怖", target: { page: "category", attributes: { category: "恐怖", param: "kongbu" } } },
+                    { label: "生存", target: { page: "category", attributes: { category: "生存", param: "shengcun" } } },
+                    { label: "宅系", target: { page: "category", attributes: { category: "宅系", param: "zhaixi" } } },
+                    { label: "转生", target: { page: "category", attributes: { category: "转生", param: "zhuansheng" } } },
+                    { label: "仙侠", target: { page: "category", attributes: { category: "仙侠", param: "xianxia" } } },
                 ]
             }
         ]
@@ -310,70 +493,15 @@ class CopyManga extends ComicSource {
 
     categoryComics = {
         load: async (category, param, options, page) => {
-            var baseUrl = this._baseUrl;
+            var b = this._baseUrl;
 
-            // Ranking mode
-            if (category === "排行" || param === "ranking") {
-                var audienceType = options && options[0] ? options[0] : "male";
-                var dateType = options && options[1] ? options[1] : "day";
-                var url = baseUrl + "/rank?type=" + audienceType + "&table=" + dateType;
-                var resp = await Network.get(url, { dnts: "3" });
-                var body = resp.body;
+            if (param && param.startsWith("author:")) return loadAuthorPage(b, param.slice(7), page);
+            if (category === "漫畫推薦") return loadExplorePage(b, "/recommend?type=3200102", 60, page, parseHtmlComicList);
+            if (category === "熱門更新") return loadExplorePage(b, "/comics?ordering=-hits_total", 50, page, parseListAttribute);
+            if (category === "全新上架") return loadExplorePage(b, "/newest", 60, page, parseHtmlComicList);
+            if (category === "排行" || param === "ranking") return loadRankingPage(b, options);
 
-                var doc = new HtmlDocument(body);
-                var items = doc.querySelectorAll(".ranking-all > li");
-
-                var comics = [];
-                for (var i = 0; i < items.length; i++) {
-                    var el = items[i];
-                    var link = el.querySelector("a[href*='/comic/']");
-                    if (!link) continue;
-                    var href = link.attributes ? link.attributes.href || "" : "";
-                    var idMatch = href.match(/\/comic\/([^/]+)/);
-                    if (!idMatch) continue;
-                    var id = idMatch[1];
-
-                    var titleEl = el.querySelector(".threeLines");
-                    var title = titleEl ? titleEl.text.trim() : id;
-
-                    var imgEl = el.querySelector("img");
-                    var cover = "";
-                    if (imgEl) {
-                        cover = imgEl.attributes["data-src"] || imgEl.attributes.src || "";
-                    }
-
-                    var authorEl = el.querySelector(".oneLines");
-                    var author = "";
-                    if (authorEl) {
-                        var authorLink = authorEl.querySelector("a");
-                        if (authorLink) author = authorLink.text.trim();
-                    }
-
-                    comics.push(new Comic({ id: id, title: title, cover: cover, subTitle: author }));
-                }
-
-                doc.dispose();
-                return { comics: comics, maxPage: 1 };
-            }
-
-            // Theme browsing mode
-            var offset = ((page || 1) - 1) * 50;
-            var region = options && options[0] ? options[0] : "";
-            var status = options && options[1] ? options[1] : "";
-            var ordering = options && options[2] ? options[2] : "-datetime_updated";
-            var url = baseUrl + "/comics?theme=" + encodeURIComponent(category);
-            if (region) url += "&region=" + region;
-            if (status) url += "&status=" + status;
-            url += "&ordering=" + ordering + "&offset=" + offset + "&limit=50";
-            var resp = await Network.get(url, { dnts: "3" });
-
-            // Parse comics from list attribute
-            var comics = parseExploreList(resp.body);
-
-            // Parse max page from pagination
-            var maxPage = parseMaxPage(resp.body);
-
-            return { comics: comics, maxPage: maxPage };
+            return loadThemePage(b, category, param, options, page);
         },
         optionList: [
             {
@@ -384,7 +512,7 @@ class CopyManga extends ComicSource {
                     "1-韩漫",
                     "2-美漫",
                 ],
-                notShowWhen: ["排行"],
+                notShowWhen: ["排行", "漫畫推薦", "全新上架"],
             },
             {
                 label: "状态",
@@ -394,15 +522,15 @@ class CopyManga extends ComicSource {
                     "1-已完结",
                     "2-短篇",
                 ],
-                notShowWhen: ["排行"],
+                notShowWhen: ["排行", "漫畫推薦", "全新上架"],
             },
             {
                 label: "排序",
                 options: [
-                    "-datetime_updated-最新",
-                    "-popular-最熱",
+                    "new-最新",
+                    "hot-最熱",
                 ],
-                notShowWhen: ["排行"],
+                notShowWhen: ["排行", "漫畫推薦", "全新上架"],
             },
             {
                 options: [
@@ -425,7 +553,7 @@ class CopyManga extends ComicSource {
 
     search = {
         load: async (keyword, options, page) => {
-            var offset = ((page || 1) - 1) * 12;
+            var offset = this._offset(page, 12);
             var url = this._baseUrl + "/api/kb/web/searchci/comics?offset=" + offset + "&platform=2&limit=12&q="
                 + encodeURIComponent(keyword) + "&q_type=";
             var resp = await Network.get(url, { dnts: "3" });
@@ -469,18 +597,29 @@ class CopyManga extends ComicSource {
             var descMatch = body.match(/<p class="intro">([\s\S]*?)<\/p>/);
             if (descMatch) description = descMatch[1].trim();
 
-            // Author
-            var author = "";
-            var authorMatch = body.match(/<a href="\/author\/[^"]+"[^>]*>([^<]+)<\/a>/);
-            if (authorMatch) author = authorMatch[1];
+            // Authors (name + slug for navigation)
+            var authorRegex = /<a href="\/author\/([^"]+)\/comics"[^>]*>([^<]+)<\/a>/g;
+            var authorMatch;
+            var authors = [];
+            var authorSlugs = {};
+            while ((authorMatch = authorRegex.exec(body)) !== null) {
+                var slug = authorMatch[1];
+                var name = authorMatch[2];
+                authors.push(name);
+                authorSlugs[name] = slug;
+            }
+            this._authorSlugs = authorSlugs;
 
-            // Tags
+            // Tags (theme): store display name + slug mapping for reliable tag click navigation
             var tagList = [];
-            var tagRegex = /<a href="\/comics\?theme=[^"]+"[^>]*>#([^<]+)<\/a>/g;
+            var tagSlugs = {};
+            var tagRegex = /<a href="\/comics\?theme=([^"]+)"[^>]*>#([^<]+)<\/a>/g;
             var tagMatch;
             while ((tagMatch = tagRegex.exec(body)) !== null) {
-                tagList.push(tagMatch[1]);
+                tagList.push(tagMatch[2]);
+                tagSlugs[tagMatch[2]] = tagMatch[1];
             }
+            this._themeSlugs = tagSlugs;
             // Update time: "最後更新：2026-06-21"
             var updateTime = "";
             var updateMatch = body.match(/(?:最後|最后)更新[：:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
@@ -492,9 +631,10 @@ class CopyManga extends ComicSource {
             if (!statusMatch) statusMatch = body.match(/状态[：:][\s\S]*?<span[^>]*>([^<]+)<\/span>/);
             if (statusMatch) statusText = statusMatch[1].trim();
 
-            // Build tags: genres, update time, status
+            // Build tags: genres, authors, status
             var tags = {};
             if (tagList.length > 0) tags["题材"] = tagList;
+            if (authors.length > 0) tags["作者"] = authors;
             if (statusText) tags["状态"] = [statusText];
 
             // Fetch chapter list from encrypted API
@@ -506,18 +646,42 @@ class CopyManga extends ComicSource {
                 description: description,
                 tags: tags,
                 chapters: chapters,
-                uploader: author,
                 updateTime: updateTime,
             });
         },
 
         onClickTag: (namespace, tag) => {
-            return new PageJumpTarget({
-                page: "search",
-                attributes: {
-                    keyword: tag,
-                },
-            });
+            if (namespace === "题材") {
+                // 1) Use slug extracted from the comic page HTML (handles Trad/Simp perfectly)
+                var slug = this._themeSlugs ? this._themeSlugs[tag] : null;
+                if (slug) {
+                    return { action: "category", keyword: tag, param: slug };
+                }
+                // 2) Fallback: look up in the category list by label
+                var catPart = this.category.parts.find(function (p) { return p.name === "分类"; });
+                if (catPart) {
+                    for (var ci = 0; ci < catPart.categories.length; ci++) {
+                        var entry = catPart.categories[ci];
+                        if (entry.label === tag && entry.target && entry.target.attributes) {
+                            return { action: "category", keyword: tag, param: entry.target.attributes.param };
+                        }
+                    }
+                }
+            }
+            if (namespace === "作者") {
+                var slug = this._authorSlugs ? this._authorSlugs[tag] : null;
+                if (slug) {
+                    return {
+                        action: "category",
+                        keyword: tag,
+                        param: "author:" + slug,
+                    };
+                }
+            }
+            return {
+                action: "search",
+                keyword: tag,
+            };
         },
 
         loadEp: async (comicId, epId) => {
@@ -548,16 +712,7 @@ class CopyManga extends ComicSource {
             var token = this.loadData("token");
             if (!token) throw "登录已过期";
 
-            var uuid = favoriteId || null;
-
-            // If no UUID available, fetch comic detail page to extract it
-            if (!uuid) {
-                var baseUrl = this._baseUrl;
-                var resp = await Network.get(baseUrl + "/comic/" + encodeURIComponent(comicId), { dnts: "3" });
-                var uuidMatch = resp.body.match(/onclick="collect\('([^']+)'\)"/);
-                if (uuidMatch) uuid = uuidMatch[1];
-            }
-
+            var uuid = favoriteId || await this._fetchFavUuid(comicId);
             if (!uuid) throw "未能获取漫画UUID";
 
             var res = await Network.post(
@@ -571,7 +726,6 @@ class CopyManga extends ComicSource {
 
             var json = JSON.parse(res.body);
             if (json.code === 200) return "ok";
-
             throw json.message || "收藏失败";
         },
 
@@ -580,7 +734,7 @@ class CopyManga extends ComicSource {
             var headers = {};
             if (token) headers["Authorization"] = "Token " + token;
 
-            var offset = ((page || 1) - 1) * 12;
+            var offset = this._offset(page, 12);
             var url = this._baseUrl + "/api/v3/member/collect/comics?limit=12&offset=" + offset
                 + "&free_type=1&ordering=-datetime_modifier";
 
@@ -620,18 +774,6 @@ class CopyManga extends ComicSource {
             type: "input",
             validator: null,
             default: "https://www.copy3000.com"
-        }
-    }
-
-    translation = {
-        "zh_CN": {
-            "API地址": "API地址"
-        },
-        "zh_TW": {
-            "API地址": "API地址"
-        },
-        "en": {
-            "API地址": "API Address"
         }
     }
 }
