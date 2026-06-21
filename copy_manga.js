@@ -102,6 +102,23 @@ function apiToComic(item) {
     });
 }
 
+// Extract max page number from explore/listing page HTML
+function parseMaxPage(html) {
+    var pageMatch = html.match(/<ul[^>]*class="page-all"[^>]*>[\s\S]*?<\/ul>/);
+    if (pageMatch) {
+        var nums = pageMatch[0].match(/>(\d+)<\/a>/g);
+        if (nums) {
+            var max = 1;
+            for (var i = 0; i < nums.length; i++) {
+                var n = parseInt(nums[i].replace(/>|<\/a>/g, ""));
+                if (!isNaN(n) && n > max) max = n;
+            }
+            return max;
+        }
+    }
+    return 1;
+}
+
 // ============================================================
 // Venera Source
 // ============================================================
@@ -139,13 +156,13 @@ class CopyManga extends ComicSource {
         var cookies = [];
         var domain = ".copy3000.com";
 
-        if (results.token) cookies.push(new Cookie({name: "token", value: results.token, domain: domain}));
-        if (results.user_id) cookies.push(new Cookie({name: "user_id", value: results.user_id, domain: domain}));
-        if (results.nickname) cookies.push(new Cookie({name: "name", value: results.nickname, domain: domain}));
-        if (results.avatar) cookies.push(new Cookie({name: "avatar", value: results.avatar, domain: domain}));
-        if (results.datetime_created) cookies.push(new Cookie({name: "create", value: results.datetime_created, domain: domain}));
-        if (results.comic_vip) cookies.push(new Cookie({name: "comic_vip", value: String(results.comic_vip), domain: domain}));
-        if (results.cartoon_vip) cookies.push(new Cookie({name: "cartoon_vip", value: String(results.cartoon_vip), domain: domain}));
+        if (results.token) cookies.push(new Cookie({ name: "token", value: results.token, domain: domain }));
+        if (results.user_id) cookies.push(new Cookie({ name: "user_id", value: results.user_id, domain: domain }));
+        if (results.nickname) cookies.push(new Cookie({ name: "name", value: results.nickname, domain: domain }));
+        if (results.avatar) cookies.push(new Cookie({ name: "avatar", value: results.avatar, domain: domain }));
+        if (results.datetime_created) cookies.push(new Cookie({ name: "create", value: results.datetime_created, domain: domain }));
+        if (results.comic_vip) cookies.push(new Cookie({ name: "comic_vip", value: String(results.comic_vip), domain: domain }));
+        if (results.cartoon_vip) cookies.push(new Cookie({ name: "cartoon_vip", value: String(results.cartoon_vip), domain: domain }));
 
         Network.setCookies("https://www.copy3000.com", cookies);
     }
@@ -205,20 +222,22 @@ class CopyManga extends ComicSource {
             title: "最新",
             type: "multiPageComicList",
             load: async (page) => {
-                var url = this._baseUrl + "/comics?ordering=-datetime_updated&page=" + (page || 1);
+                var offset = ((page || 1) - 1) * 50;
+                var url = this._baseUrl + "/comics?ordering=-datetime_updated&offset=" + offset + "&limit=50";
                 var resp = await Network.get(url, { dnts: "3" });
                 var comics = parseExploreList(resp.body);
-                return { comics: comics, maxPage: 999 };
+                return { comics: comics, maxPage: parseMaxPage(resp.body) };
             }
         },
         {
             title: "热门",
             type: "multiPageComicList",
             load: async (page) => {
-                var url = this._baseUrl + "/comics?ordering=-hits_total&page=" + (page || 1);
+                var offset = ((page || 1) - 1) * 50;
+                var url = this._baseUrl + "/comics?ordering=-hits_total&offset=" + offset + "&limit=50";
                 var resp = await Network.get(url, { dnts: "3" });
                 var comics = parseExploreList(resp.body);
-                return { comics: comics, maxPage: 999 };
+                return { comics: comics, maxPage: parseMaxPage(resp.body) };
             }
         }
     ]
@@ -226,6 +245,13 @@ class CopyManga extends ComicSource {
     category = {
         title: "题材",
         parts: [
+            {
+                name: "排行",
+                type: "fixed",
+                categories: ["排行"],
+                categoryParams: ["ranking"],
+                itemType: "category",
+            },
             {
                 name: "分类",
                 type: "fixed",
@@ -280,61 +306,35 @@ class CopyManga extends ComicSource {
                 ]
             }
         ],
-        enableRankingPage: false,
+        enableRankingPage: true,
     }
 
     categoryComics = {
         load: async (category, param, options, page) => {
-            var offset = ((page || 1) - 1) * 50;
-            var ordering = options && options[0] ? options[0] : "-datetime_updated";
-            var url = this._baseUrl + "/comics?theme=" + encodeURIComponent(category)
-                + "&ordering=" + ordering
-                + "&offset=" + offset + "&limit=50";
-            var resp = await Network.get(url, { dnts: "3" });
-            var comics = parseExploreList(resp.body);
-            return { comics: comics, maxPage: 999 };
-        },
-        optionList: [
-            {
-                label: "排序",
-                options: [
-                    "-datetime_updated-最新",
-                    "-popular-最熱",
-                ]
-            }
-        ],
-        ranking: {
-            options: [
-                "day-日榜",
-                "week-周榜",
-                "month-月榜",
-                "total-總榜",
-            ],
-            load: async (option, page) => {
-                var url = this._baseUrl + "/rank?type=male&table=" + option;
+            var baseUrl = this._baseUrl;
+
+            // Ranking mode
+            if (category === "排行" || param === "ranking") {
+                var audienceType = options && options[0] ? options[0] : "male";
+                var dateType = options && options[1] ? options[1] : "day";
+                var url = baseUrl + "/rank?type=" + audienceType + "&table=" + dateType;
                 var resp = await Network.get(url, { dnts: "3" });
                 var body = resp.body;
 
-                // Parse ranking HTML: extract comic cards
                 var doc = new HtmlDocument(body);
-                var items = doc.querySelectorAll(".row .comicParticulars-right a[href*='/comic/']");
-                if (!items || items.length === 0) {
-                    // Fallback: look for any links containing /comic/
-                    items = doc.querySelectorAll("a[href*='/comic/']");
-                }
+                var items = doc.querySelectorAll(".ranking-all > li");
 
                 var comics = [];
-                var seen = {};
                 for (var i = 0; i < items.length; i++) {
                     var el = items[i];
-                    var href = el.attributes ? el.attributes.href || "" : "";
+                    var link = el.querySelector("a[href*='/comic/']");
+                    if (!link) continue;
+                    var href = link.attributes ? link.attributes.href || "" : "";
                     var idMatch = href.match(/\/comic\/([^/]+)/);
                     if (!idMatch) continue;
                     var id = idMatch[1];
-                    if (seen[id]) continue;
-                    seen[id] = true;
 
-                    var titleEl = el.querySelector("p") || el;
+                    var titleEl = el.querySelector(".threeLines");
                     var title = titleEl ? titleEl.text.trim() : id;
 
                     var imgEl = el.querySelector("img");
@@ -343,18 +343,84 @@ class CopyManga extends ComicSource {
                         cover = imgEl.attributes["data-src"] || imgEl.attributes.src || "";
                     }
 
-                    comics.push(new Comic({
-                        id: id,
-                        title: title,
-                        cover: cover,
-                    }));
+                    var authorEl = el.querySelector(".oneLines");
+                    var author = "";
+                    if (authorEl) {
+                        var authorLink = authorEl.querySelector("a");
+                        if (authorLink) author = authorLink.text.trim();
+                    }
+
+                    comics.push(new Comic({ id: id, title: title, cover: cover, subTitle: author }));
                 }
 
                 doc.dispose();
-
                 return { comics: comics, maxPage: 1 };
             }
-        }
+
+            // Theme browsing mode
+            var region = options && options[0] ? options[0] : "";
+            var status = options && options[1] ? options[1] : "";
+            var ordering = options && options[2] ? options[2] : "-datetime_updated";
+            var url = baseUrl + "/comics?theme=" + encodeURIComponent(category);
+            if (region) url += "&region=" + region;
+            if (status) url += "&status=" + status;
+            url += "&ordering=" + ordering + "&offset=" + offset + "&limit=50";
+            var resp = await Network.get(url, { dnts: "3" });
+
+            // Parse comics from list attribute
+            var comics = parseExploreList(resp.body);
+
+            // Parse max page from pagination
+            var maxPage = parseMaxPage(resp.body);
+
+            return { comics: comics, maxPage: maxPage };
+        },
+        optionList: [
+            {
+                label: "地区",
+                options: [
+                    "-全部",
+                    "0-日漫",
+                    "1-韩漫",
+                    "2-美漫",
+                ],
+                notShowWhen: ["排行"],
+            },
+            {
+                label: "状态",
+                options: [
+                    "-全部",
+                    "0-连载中",
+                    "1-已完结",
+                    "2-短篇",
+                ],
+                notShowWhen: ["排行"],
+            },
+            {
+                label: "排序",
+                options: [
+                    "-datetime_updated-最新",
+                    "-popular-最熱",
+                ],
+                notShowWhen: ["排行"],
+            },
+            {
+                options: [
+                    "male-男频",
+                    "female-女频",
+                ],
+                showWhen: ["排行"],
+            },
+            {
+                options: [
+                    "day-日榜",
+                    "week-周榜",
+                    "month-月榜",
+                    "total-总榜",
+                ],
+                showWhen: ["排行"],
+            },
+        ],
     }
 
     search = {
@@ -429,7 +495,6 @@ class CopyManga extends ComicSource {
             // Build tags: genres, update time, status
             var tags = {};
             if (tagList.length > 0) tags["题材"] = tagList;
-            if (updateTime) tags["更新"] = [updateTime];
             if (statusText) tags["状态"] = [statusText];
 
             // Fetch chapter list from encrypted API
